@@ -8,4 +8,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Remove="Assets\enemy_idle.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\enemy_idle.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

@@ -51,7 +51,7 @@ namespace Raycaster
         // ----------------------------
         // MINI MAP
         // ----------------------------
-        private void DrawMiniMap(Graphics g, int[,] map, Player player)
+        public void DrawMiniMap(Graphics g, int[,] map, Player player)
         {
             const int scale = 3;
             const int padding = 5;
@@ -92,6 +92,19 @@ namespace Raycaster
                 padding + (float)(player.posX + player.dirX * 2) * scale,
                 ViewHeight + padding + (float)(player.posY + player.dirY) * scale
             );
+
+            foreach (var enemy in player.enemies)
+            {
+                if (!enemy.Alive) continue;
+
+                g.FillEllipse(
+                    Brushes.Lime,
+                    padding + (float)enemy.X * scale - 2,
+                    ViewHeight + padding + (float)enemy.Y * scale - 2,
+                    4,
+                    4
+                );
+            }
         }
 
         // ----------------------------

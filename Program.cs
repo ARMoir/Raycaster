@@ -12,19 +12,24 @@ class Program : Form
     System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
 
     //Generte Random Map
-    int[,] map = Extensions.BuildRaycasterMap(new Maze(15, 15), 15, 15);
+    int[,] map = Extensions.BuildRaycasterMap(new Maze(5, 5), 5, 5);
 
     HudRenderer hud = new HudRenderer(ScreenWidth, ScreenHeight, 100);
 
     Player player = new Player
     {
-        posX = 1.5,
-        posY = 1.5,
+        posX = 0.5,
+        posY = 0.5,
         dirX = 1,
         dirY = 0
     };
 
     bool left, right, forward, backward;
+
+    Bitmap enemySprite = new Bitmap
+    (
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "enemy_idle.png")
+    );
 
     [STAThread]
     static void Main()
@@ -103,13 +108,84 @@ class Program : Form
             player.planeX = player.planeX * Math.Cos(rot) - player.planeY * Math.Sin(rot);
             player.planeY = oldPlaneX * Math.Sin(rot) + player.planeY * Math.Cos(rot);
         }
+    }
 
+    public void RenderSprites(Graphics g, double[] zBuffer)
+    {
+        foreach (var enemy in player.enemies)
+        {
+            if (!enemy.Alive) continue;
+
+            // Enemy must be in an empty tile
+            int mx = (int)enemy.X;
+            int my = (int)enemy.Y;
+            if (map[my, mx] != 0) continue;
+
+            // Translate to camera space
+            double spriteX = enemy.X - player.posX;
+            double spriteY = enemy.Y - player.posY;
+
+            // Inverse camera matrix
+            double invDet = 1.0 / (player.planeX * player.dirY - player.dirX * player.planeY);
+
+            double transformX = invDet * (player.dirY * spriteX - player.dirX * spriteY);
+            double transformY = invDet * (-player.planeY * spriteX + player.planeX * spriteY);
+
+            if (transformY <= 0) continue; // Behind camera
+
+            int spriteScreenX = (int)((ScreenWidth / 2) * (1 + transformX / transformY));
+
+            int spriteHeight = Math.Abs((int)(ScreenHeight / transformY));
+            int drawStartY = -spriteHeight / 2 + ScreenHeight / 2; 
+            int drawEndY = spriteHeight / 2 + ScreenHeight / 2;
+
+            drawStartY = Math.Max(0, drawStartY);
+            drawEndY = Math.Min(ScreenHeight - 1, drawEndY);
+
+            int spriteWidth = spriteHeight;
+            int drawStartX = -spriteWidth / 2 + spriteScreenX;
+            int drawEndX = spriteWidth / 2 + spriteScreenX;
+
+            Bitmap sprite = enemySprite;
+
+            for (int stripe = drawStartX; stripe < drawEndX; stripe++)
+            {
+                if (stripe < 0 || stripe >= ScreenWidth) continue;
+                if (transformY >= zBuffer[stripe]) continue; // Wall in front
+
+                int texX = (int)((stripe - drawStartX) * sprite.Width / (double)spriteWidth);
+                if (texX < 0 || texX >= sprite.Width) continue;
+
+                for (int y = drawStartY; y < drawEndY; y++)
+                {
+                    int d = y * 256 - ScreenHeight * 128 + spriteHeight * 128;
+                    int texY = ((d * sprite.Height) / spriteHeight) / 256;
+
+                    if (texY < 0 || texY >= sprite.Height) continue;
+
+                    spriteHeight = Math.Min(spriteHeight, ScreenHeight * 2);
+                    spriteWidth = Math.Min(spriteWidth, ScreenWidth);
+
+                    Color c = sprite.GetPixel(texX, texY);
+
+                    // Skip transparent pixels
+                    if (c.A < 128) continue;
+
+                    framebuffer.SetPixel(stripe, y, c);
+                }
+            }
+
+
+
+        }
     }
 
     void Render()
     {
         using (Graphics g = Graphics.FromImage(framebuffer))
-        {            
+        {
+            double[] zBuffer = new double[ScreenWidth];
+
             g.Clear(Color.Black);
 
             // Ceiling
@@ -196,6 +272,8 @@ class Program : Form
                         ? (mapX - player.posX + (1 - stepX) / 2) / rayDirX
                         : (mapY - player.posY + (1 - stepY) / 2) / rayDirY;
 
+                zBuffer[x] = perpWallDist;
+
                 int lineHeight = (int)(ScreenHeight / perpWallDist);
                 int drawStart = -lineHeight / 2 + ScreenHeight / 2;
                 int drawEnd = lineHeight / 2 + ScreenHeight / 2;
@@ -207,6 +285,8 @@ class Program : Form
                 using (Pen p = new Pen(wallColor))
                     g.DrawLine(p, x, drawStart, x, drawEnd);               
             }
+
+            RenderSprites(g, zBuffer);
 
             hud.Render(g, map, player);
         }
