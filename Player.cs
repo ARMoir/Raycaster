@@ -19,6 +19,10 @@ namespace Raycaster
         public int Health = 100;
         public int Ammo = 30;
 
+        // Battle-axe animation
+        public int AttackFrame = 0;       // current frame of swing
+        public const int MaxAttackFrames = 6; // total frames per swing
+
         public List<Enemy> enemies = new List<Enemy>
         {
             new Enemy { X = 1.5, Y = 1.5 },

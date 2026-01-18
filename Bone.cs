@@ -16,7 +16,7 @@ namespace Raycaster
         public Vector2 WorldStart;
         public Vector2 WorldEnd;
 
-        public Vector2 Velocity;
+        public Vector2 Velocity = Vector2.Zero;
 
         public bool Broken;
         public bool IsCore;

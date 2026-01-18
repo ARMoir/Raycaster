@@ -2,12 +2,19 @@ using Raycaster;
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Numerics;
 using System.Windows.Forms;
 
 class Program : Form
 {
     const int ScreenWidth = 960;
     const int ScreenHeight = 640;
+    Random rng = new Random();
+
+
+    bool attacking;
+    int attackCooldown = 0;
+    const int AttackCooldownFrames = 5; // ~0.3s
 
     Bitmap framebuffer = new Bitmap(ScreenWidth, ScreenHeight);
     System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
@@ -63,7 +70,7 @@ class Program : Form
         }
 
         // Add 5 enemies in walkable tiles
-        Random rng = new Random();
+        //Random rng = new Random();
         int enemyCount = 15;
         for (int i = 0; i < enemyCount; i++)
         {
@@ -83,7 +90,9 @@ class Program : Form
         if (key == Keys.D) right = down;
         if (key == Keys.W) forward = down;
         if (key == Keys.S) backward = down;
+        if (key == Keys.Space) attacking = down;
     }
+
 
     void UpdateGame()
     {
@@ -128,7 +137,133 @@ class Program : Form
             player.planeX /= len;
             player.planeY /= len;
         }
+
+        if (attacking && attackCooldown == 0)
+        {
+            PerformMeleeAttack();
+            attackCooldown = AttackCooldownFrames;
+
+            // Start swing animation
+            player.AttackFrame = 1; // start first frame
+        }
+
+        // Advance axe swing animation
+        if (player.AttackFrame > 0)
+        {
+            player.AttackFrame++;
+            if (player.AttackFrame > Player.MaxAttackFrames)
+                player.AttackFrame = 0;
+        }
+
+
+        if (attackCooldown > 0)
+            attackCooldown--;
+
+        if (attacking && attackCooldown == 0)
+        {
+            PerformMeleeAttack();
+            attackCooldown = AttackCooldownFrames;
+        }
+
+        foreach (var enemy in player.enemies.OfType<SkeletonEnemy>())
+        {
+            // Trigger explosion if half bones are broken
+            if (!enemy.Exploding && enemy.Bones.Count(b => b.Broken) >= enemy.Bones.Count / 5)
+            {
+                enemy.Exploding = true;
+                enemy.ExplosionFrames = 0;
+            }
+
+            // Animate exploding bones
+            if (enemy.Exploding)
+            {
+                enemy.ExplosionFrames++;
+
+                foreach (var bone in enemy.Bones.Where(b => b.Broken))
+                {
+                    if (bone.Velocity == Vector2.Zero)
+                    {
+                        // Assign random outward velocity
+                        double angle = rng.NextDouble() * Math.PI * 2;
+                        float speed = 0.3f + (float)rng.NextDouble() * 0.3f;
+                        bone.Velocity = new Vector2((float)Math.Cos(angle) * speed, (float)Math.Sin(angle) * speed);
+                    }
+
+                    // Move bone outward
+                    bone.LocalStart += bone.Velocity;
+                    bone.LocalEnd += bone.Velocity;
+
+                    // Shrink over time
+                    bone.Thickness *= 0.95f;
+                }
+
+                // Remove skeleton after animation completes
+                if (enemy.ExplosionFrames > SkeletonEnemy.MaxExplosionFrames)
+                {
+                    enemy.Bones.Clear();
+                }
+            }
+        }
+
     }
+
+    void PerformMeleeAttack()
+    {
+        const double attackRange = 1.9; // axe reach
+        const double attackAngle = 0.7; // radians (~20 degrees)
+
+        SkeletonEnemy? closest = null;
+        double closestDist = double.MaxValue;
+
+        foreach (var enemy in player.enemies)
+        {
+            if (!enemy.Alive) continue;
+
+            double dx = enemy.X - player.posX;
+            double dy = enemy.Y - player.posY;
+            double dist = Math.Sqrt(dx * dx + dy * dy);
+            if (dist > attackRange) continue;
+
+            // Normalize vector to enemy
+            double nx = dx / dist;
+            double ny = dy / dist;
+
+            // Dot product to check "in front"
+            double dot = nx * player.dirX + ny * player.dirY;
+
+            if (dot < Math.Cos(attackAngle)) continue;
+
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = enemy as SkeletonEnemy;
+            }
+        }
+
+        if (closest != null)
+            DamageSkeleton(closest);
+    }
+
+    void DamageSkeleton(SkeletonEnemy skeleton)
+    {
+        // Prefer core bones first
+        var targetBones = skeleton.Bones
+            .Where(b => !b.Broken)
+            .OrderByDescending(b => b.IsCore)
+            .ToList();
+
+        if (targetBones.Count == 0)
+            return;
+
+        Random rng = new Random();
+        int breaks = rng.Next(5, 10); 
+
+        foreach (var bone in targetBones.Take(breaks))
+            bone.Broken = true;
+    }
+
+
+
     void RenderSprites(Graphics g, double[] zBuffer)
     {
         foreach (var enemy in player.enemies)
@@ -292,7 +427,6 @@ class Program : Form
         }
     }
 
-
     void DrawHorizonGlow(Graphics g)
     {
         using var brush = new LinearGradientBrush(
@@ -304,6 +438,101 @@ class Program : Form
         g.FillRectangle(brush, 0, ScreenHeight / 2 - 20, ScreenWidth, 40);
     }
 
+    void DrawPlayerAxe(Graphics g)
+    {
+        if (player.AttackFrame == 0) return;
+
+        int w = framebuffer.Width;
+        int h = framebuffer.Height;
+
+        float t = player.AttackFrame / (float)Player.MaxAttackFrames;
+
+        // Big brutal swing arc
+        float angle = -1.2f + 2.4f * t;
+
+        // Pivot at bottom center
+        PointF pivot = new(w / 2, h - 40);
+
+        float haftLength = 340;
+        float haftWidth = 18;
+
+        // Shaft direction
+        float dx = (float)Math.Sin(angle);
+        float dy = -(float)Math.Cos(angle);
+
+        PointF head = new(
+            pivot.X + dx * haftLength,
+            pivot.Y + dy * haftLength
+        );
+
+        // Draw wooden haft
+        using (var pen = new Pen(Color.SaddleBrown, haftWidth)
+        {
+            StartCap = System.Drawing.Drawing2D.LineCap.Round,
+            EndCap = System.Drawing.Drawing2D.LineCap.Round
+        })
+        {
+            g.DrawLine(pen, pivot, head);
+        }
+
+        // Perpendicular for blade width
+        float px = -dy;
+        float py = dx;
+
+        // ---- MAIN BLADE (crescent) ----
+        PointF[] frontBlade =
+        {
+        new(head.X + px * 90 - dx * 20, head.Y + py * 90 - dy * 20),
+        new(head.X + px * 50 - dx * 70, head.Y + py * 50 - dy * 70),
+        new(head.X - px * 50 - dx * 70, head.Y - py * 50 - dy * 70),
+        new(head.X - px * 90 - dx * 20, head.Y - py * 90 - dy * 20),
+        new(head.X - px * 20,            head.Y - py * 20),
+        new(head.X + px * 20,            head.Y + py * 20)
+    };
+
+        // ---- REAR SPIKE / HOOK ----
+        PointF[] rearBlade =
+        {
+        new(head.X + px * 35 + dx * 20, head.Y + py * 35 + dy * 20),
+        new(head.X + dx * 90,           head.Y + dy * 90),
+        new(head.X - px * 35 + dx * 20, head.Y - py * 35 + dy * 20)
+    };
+
+        // Glow underlayer
+        using (var glow = new SolidBrush(Color.FromArgb(80, 255, 120, 0)))
+        {
+            g.FillPolygon(glow, frontBlade);
+            g.FillPolygon(glow, rearBlade);
+        }
+
+        // Blade metal
+        using (var steel = new SolidBrush(Color.Orange))
+        {
+            g.FillPolygon(steel, frontBlade);
+            g.FillPolygon(steel, rearBlade);
+        }
+
+        // Blade edge highlight
+        using (var edge = new Pen(Color.Yellow, 6))
+        {
+            g.DrawPolygon(edge, frontBlade);
+            g.DrawPolygon(edge, rearBlade);
+        }
+
+        // Impact arc
+        using var arc = new Pen(Color.FromArgb(80, 255, 140, 0), 22);
+        g.DrawArc(
+            arc,
+            pivot.X - 400,
+            pivot.Y - 400,
+            800,
+            800,
+            angle * 180 / (float)Math.PI - 25,
+            50
+        );
+    }
+
+
     void Render()
     {
         using (Graphics g = Graphics.FromImage(framebuffer))
@@ -314,6 +543,8 @@ class Program : Form
             DrawFloor(g);
             DrawCeiling(g);
             DrawHorizonGlow(g);
+            
+
 
             for (int x = 0; x < ScreenWidth; x++)
             {
@@ -389,6 +620,7 @@ class Program : Form
                 DrawGlowColumn(g, x, drawStart, drawEnd, baseColor);
             }
 
+            DrawPlayerAxe(g);
             RenderSprites(g, zBuffer);
             hud.Render(g, map, player);
         }

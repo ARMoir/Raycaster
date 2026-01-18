@@ -8,8 +8,12 @@ public class SkeletonEnemy : Enemy
     public List<Bone> Bones = new();
 
     public Vector2 Position => new((float)X, (float)Y);
+    public new bool Alive => Bones.Any(b => b.IsCore && !b.Broken) || Exploding;
 
-    public new bool Alive => Bones.Any(b => b.IsCore && !b.Broken);
+    // Explosion state
+    public bool Exploding = false;
+    public int ExplosionFrames = 0;
+    public const int MaxExplosionFrames = 160;
 
     public SkeletonEnemy(double x, double y)
     {
