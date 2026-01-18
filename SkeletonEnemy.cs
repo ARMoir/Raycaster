@@ -20,37 +20,106 @@ public class SkeletonEnemy : Enemy
 
     void Build()
     {
-        // -------- Spine / Torso --------
-        Bones.Add(new Bone { LocalStart = new Vector2(0, -18), LocalEnd = new Vector2(0, -10), IsCore = true, Thickness = 3 });
-        Bones.Add(new Bone { LocalStart = new Vector2(0, -10), LocalEnd = new Vector2(0, -2), IsCore = true, Thickness = 3 });
-        Bones.Add(new Bone { LocalStart = new Vector2(0, -2), LocalEnd = new Vector2(0, 6), IsCore = true, Thickness = 3 });
-        Bones.Add(new Bone { LocalStart = new Vector2(0, 6), LocalEnd = new Vector2(0, 14), IsCore = true, Thickness = 3 });
+        const float H = 54f;   // -22 → +32
+        const float CY = 5f;
+        const float W = 54f;
 
-        // -------- Rib cage / chest -------- (centered on upper torso)
-        Bones.Add(new Bone { LocalStart = new Vector2(-6, -10), LocalEnd = new Vector2(6, -10), IsCore = true, Thickness = 2 });
-        Bones.Add(new Bone { LocalStart = new Vector2(-5, -6), LocalEnd = new Vector2(5, -6), Thickness = 2 });
-        Bones.Add(new Bone { LocalStart = new Vector2(-4, -2), LocalEnd = new Vector2(4, -2), Thickness = 2 });
+        Vector2 N(float x, float y)
+            => new(x / W, (y - CY) / H);
 
-        // -------- Head -------- (larger, on top)
-        Bones.Add(new Bone { LocalStart = new Vector2(-4, -22), LocalEnd = new Vector2(4, -22), IsCore = true, Thickness = 2 });
-        Bones.Add(new Bone { LocalStart = new Vector2(0, -22), LocalEnd = new Vector2(0, -18), IsCore = true, Thickness = 2 });
+        // =========================
+        // SPINE (thick core)
+        // =========================
+        Bones.Add(new Bone { LocalStart = N(0, -20), LocalEnd = N(0, -14), IsCore = true, Thickness = 0.10f });
+        Bones.Add(new Bone { LocalStart = N(0, -14), LocalEnd = N(0, -8), IsCore = true, Thickness = 0.10f });
+        Bones.Add(new Bone { LocalStart = N(0, -8), LocalEnd = N(0, -2), IsCore = true, Thickness = 0.10f });
+        Bones.Add(new Bone { LocalStart = N(0, -2), LocalEnd = N(0, 6), IsCore = true, Thickness = 0.10f });
+        Bones.Add(new Bone { LocalStart = N(0, 6), LocalEnd = N(0, 14), IsCore = true, Thickness = 0.10f });
 
-        // -------- Arms -------- (connected to rib cage, natural bend)
-        // Left arm (battle stance)
-        Bones.Add(new Bone { LocalStart = new Vector2(-6, -8), LocalEnd = new Vector2(-14, -2), Thickness = 3 });
-        Bones.Add(new Bone { LocalStart = new Vector2(-14, -2), LocalEnd = new Vector2(-22, 4), Thickness = 3 }); // lower arm
-        Bones.Add(new Bone { LocalStart = new Vector2(-22, 4), LocalEnd = new Vector2(-26, 8), Thickness = 4 }); // hand / weapon
+        // =========================
+        // RIB CAGE
+        // =========================
+        for (int i = 0; i < 4; i++)
+        {
+            float y = -12 + i * 4;
+            float w = 7 - i;
 
-        // Right arm (raised claw)
-        Bones.Add(new Bone { LocalStart = new Vector2(6, -8), LocalEnd = new Vector2(14, -4), Thickness = 3 });
-        Bones.Add(new Bone { LocalStart = new Vector2(14, -4), LocalEnd = new Vector2(20, 0), Thickness = 2 });
-        Bones.Add(new Bone { LocalStart = new Vector2(20, 0), LocalEnd = new Vector2(22, 2), Thickness = 1 });
+            Bones.Add(new Bone { LocalStart = N(-w, y), LocalEnd = N(w, y), Thickness = 0.065f });
+            Bones.Add(new Bone { LocalStart = N(-w, y), LocalEnd = N(-w + 1.5f, y + 3), Thickness = 0.045f });
+            Bones.Add(new Bone { LocalStart = N(w, y), LocalEnd = N(w - 1.5f, y + 3), Thickness = 0.045f });
+        }
 
-        // -------- Legs -------- (slightly angled outward)
-        Bones.Add(new Bone { LocalStart = new Vector2(-3, 14), LocalEnd = new Vector2(-6, 28), Thickness = 3 });
-        Bones.Add(new Bone { LocalStart = new Vector2(3, 14), LocalEnd = new Vector2(6, 28), Thickness = 3 });
-        Bones.Add(new Bone { LocalStart = new Vector2(-6, 28), LocalEnd = new Vector2(-8, 32), Thickness = 2 }); // left foot
-        Bones.Add(new Bone { LocalStart = new Vector2(6, 28), LocalEnd = new Vector2(8, 32), Thickness = 2 }); // right foot
+        Bones.Add(new Bone { LocalStart = N(0, -12), LocalEnd = N(0, 0), IsCore = true, Thickness = 0.06f });
+
+        // =========================
+        // JACK-O-LANTERN HEAD
+        // =========================
+        Bones.Add(new Bone { LocalStart = N(-6, -26), LocalEnd = N(6, -26), IsCore = true, Thickness = 0.09f });
+        Bones.Add(new Bone { LocalStart = N(-6, -26), LocalEnd = N(-7, -22), Thickness = 0.08f });
+        Bones.Add(new Bone { LocalStart = N(6, -26), LocalEnd = N(7, -22), Thickness = 0.08f });
+        Bones.Add(new Bone { LocalStart = N(-7, -22), LocalEnd = N(-6, -18), Thickness = 0.07f });
+        Bones.Add(new Bone { LocalStart = N(7, -22), LocalEnd = N(6, -18), Thickness = 0.07f });
+        Bones.Add(new Bone { LocalStart = N(-5, -18), LocalEnd = N(5, -18), Thickness = 0.07f });
+
+        Bones.Add(new Bone { LocalStart = N(-3, -26), LocalEnd = N(-4, -18), Thickness = 0.05f });
+        Bones.Add(new Bone { LocalStart = N(0, -26), LocalEnd = N(0, -18), IsCore = true, Thickness = 0.055f });
+        Bones.Add(new Bone { LocalStart = N(3, -26), LocalEnd = N(4, -18), Thickness = 0.05f });
+
+        // Eyes
+        Bones.Add(new Bone { LocalStart = N(-4, -22), LocalEnd = N(-2, -20), Thickness = 0.045f });
+        Bones.Add(new Bone { LocalStart = N(-2, -20), LocalEnd = N(-1, -22), Thickness = 0.045f });
+        Bones.Add(new Bone { LocalStart = N(-4, -22), LocalEnd = N(-1, -22), Thickness = 0.035f });
+
+        Bones.Add(new Bone { LocalStart = N(4, -22), LocalEnd = N(2, -20), Thickness = 0.045f });
+        Bones.Add(new Bone { LocalStart = N(2, -20), LocalEnd = N(1, -22), Thickness = 0.045f });
+        Bones.Add(new Bone { LocalStart = N(4, -22), LocalEnd = N(1, -22), Thickness = 0.035f });
+
+        // Grin
+        Bones.Add(new Bone { LocalStart = N(-4, -19), LocalEnd = N(-2, -17), Thickness = 0.045f });
+        Bones.Add(new Bone { LocalStart = N(-2, -17), LocalEnd = N(0, -19), Thickness = 0.045f });
+        Bones.Add(new Bone { LocalStart = N(0, -19), LocalEnd = N(2, -17), Thickness = 0.045f });
+        Bones.Add(new Bone { LocalStart = N(2, -17), LocalEnd = N(4, -19), Thickness = 0.045f });
+
+        // Neck
+        Bones.Add(new Bone { LocalStart = N(0, -18), LocalEnd = N(0, -14), IsCore = true, Thickness = 0.07f });
+
+        // =========================
+        // SHOULDERS
+        // =========================
+        Bones.Add(new Bone { LocalStart = N(-7, -8), LocalEnd = N(7, -8), Thickness = 0.08f });
+
+        // =========================
+        // ARMS
+        // =========================
+        Bones.Add(new Bone { LocalStart = N(-7, -8), LocalEnd = N(-14, -4), Thickness = 0.075f });
+        Bones.Add(new Bone { LocalStart = N(-14, -4), LocalEnd = N(-20, 1), Thickness = 0.065f });
+        Bones.Add(new Bone { LocalStart = N(-20, 1), LocalEnd = N(-24, 5), Thickness = 0.055f });
+        Bones.Add(new Bone { LocalStart = N(-24, 5), LocalEnd = N(-27, 9), Thickness = 0.045f });
+
+        Bones.Add(new Bone { LocalStart = N(7, -8), LocalEnd = N(14, -4), Thickness = 0.075f });
+        Bones.Add(new Bone { LocalStart = N(14, -4), LocalEnd = N(20, 0), Thickness = 0.065f });
+        Bones.Add(new Bone { LocalStart = N(20, 0), LocalEnd = N(24, 4), Thickness = 0.055f });
+        Bones.Add(new Bone { LocalStart = N(24, 4), LocalEnd = N(26, 6), Thickness = 0.045f });
+
+        // =========================
+        // PELVIS
+        // =========================
+        Bones.Add(new Bone { LocalStart = N(-6, 12), LocalEnd = N(6, 12), IsCore = true, Thickness = 0.085f });
+        Bones.Add(new Bone { LocalStart = N(-6, 12), LocalEnd = N(-4, 16), Thickness = 0.06f });
+        Bones.Add(new Bone { LocalStart = N(6, 12), LocalEnd = N(4, 16), Thickness = 0.06f });
+
+        // =========================
+        // LEGS
+        // =========================
+        Bones.Add(new Bone { LocalStart = N(-4, 16), LocalEnd = N(-7, 24), Thickness = 0.075f });
+        Bones.Add(new Bone { LocalStart = N(-7, 24), LocalEnd = N(-8, 30), Thickness = 0.065f });
+        Bones.Add(new Bone { LocalStart = N(-8, 30), LocalEnd = N(-10, 33), Thickness = 0.05f });
+
+        Bones.Add(new Bone { LocalStart = N(4, 16), LocalEnd = N(7, 24), Thickness = 0.075f });
+        Bones.Add(new Bone { LocalStart = N(7, 24), LocalEnd = N(8, 30), Thickness = 0.065f });
+        Bones.Add(new Bone { LocalStart = N(8, 30), LocalEnd = N(10, 33), Thickness = 0.05f });
     }
+
+
 
 }

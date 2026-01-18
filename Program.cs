@@ -13,7 +13,7 @@ class Program : Form
     System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
 
     // Generate Random Map
-    int[,] map = Extensions.BuildRaycasterMap(new Maze(15, 15), 15, 15);
+    int[,] map = Extensions.BuildRaycasterMap(new Maze(5, 5), 5, 5);
 
     HudRenderer hud = new HudRenderer(ScreenWidth, ScreenHeight, 100);
 
@@ -160,34 +160,55 @@ class Program : Form
     void DrawFloor(Graphics g)
     {
         // Base fill: dark purple
-        g.FillRectangle(new SolidBrush(Color.FromArgb(20, 0, 40)), 0, 0, ScreenWidth, ScreenHeight);
+        g.FillRectangle(new SolidBrush(Color.FromArgb(255, 20, 0, 40)), 0, 0, ScreenWidth, ScreenHeight);
 
-        // Neon cyan grid
-        using var gridPen = new Pen(Color.FromArgb(150, 0, 255, 255), 1); // cyan with some glow
-
-        int gridSpacing = 30;
-
-        // Vanishing point at top-right
         float horizonY = 50;
         float vanishingX = ScreenWidth - 20;
 
-        // Horizontal lines (bottom to horizon, left to right covering more)
-        for (float y = ScreenHeight; y >= horizonY; y -= gridSpacing)
+        int glowSteps = 3;
+        Random rand = new Random(123);
+
+        // Helper: draw a glowing line
+        void DrawGlowLine(PointF a, PointF b, Color color, int steps = 3)
         {
-            float t = (ScreenHeight - y) / (ScreenHeight - horizonY); // 0 = bottom, 1 = horizon
-                                                                      // Extend left beyond screen (twice the distance to left)
-            float leftX = vanishingX - 2 * vanishingX * (1 - t);
-            float rightX = ScreenWidth;
-            g.DrawLine(gridPen, leftX, y, rightX, y);
+            for (int i = steps; i >= 1; i--)
+            {
+                using var glowPen = new Pen(Color.FromArgb(color.A / (i + 1), color.R, color.G, color.B), i * 2);
+                g.DrawLine(glowPen, a, b);
+            }
+            using var pen = new Pen(color, 1);
+            g.DrawLine(pen, a, b);
         }
 
-        // Vertical lines converging to vanishing point
-        int numLines = ScreenWidth / gridSpacing;
-        for (int i = -numLines; i <= numLines; i++)
+        Color baseColor = Color.FromArgb(180, 0, 200, 0); // 80s terminal green
+
+        // Horizontal lines (bottom to horizon) with varying spacing
+        float y = ScreenHeight;
+        while (y >= horizonY)
         {
-            float startX = i * gridSpacing;
+            float t = (ScreenHeight - y) / (ScreenHeight - horizonY);
+            float leftX = vanishingX - 2 * vanishingX * (1 - t);
+            float rightX = ScreenWidth;
+
+            // Wavy effect using sine
+            float waveAmplitude = 5f; // max horizontal offset
+            float waveFrequency = 0.05f;
+            PointF start = new PointF(leftX + (float)Math.Sin(y * waveFrequency) * waveAmplitude, y);
+            PointF end = new PointF(rightX + (float)Math.Sin(y * waveFrequency + 1) * waveAmplitude, y);
+
+            DrawGlowLine(start, end, baseColor, glowSteps);
+
+            // Vary spacing between lines randomly
+            y -= 10 + rand.Next(0, 10); // 10–20px spacing
+        }
+
+        // Vertical lines converging to vanishing point, also wavy
+        float xSpacing = 15;
+        for (float i = -ScreenWidth; i <= ScreenWidth * 2; i += xSpacing + rand.Next(0, 5))
+        {
+            float startX = i + (float)Math.Sin(i * 0.02f) * 5f; // wavy horizontal offset
             float startY = ScreenHeight;
-            g.DrawLine(gridPen, startX, startY, vanishingX, horizonY);
+            DrawGlowLine(new PointF(startX, startY), new PointF(vanishingX, horizonY), baseColor, glowSteps);
         }
     }
 
@@ -202,43 +223,71 @@ class Program : Form
         );
         g.FillRectangle(brush, 0, 0, ScreenWidth, ScreenHeight / 2);
 
-        // Golden city skyline
-        using var buildingPen = new Pen(Color.FromArgb(200, 255, 215, 0), 1); // golden
-        using var windowPen = new Pen(Color.FromArgb(150, 255, 255, 180), 1);  // lighter windows
-
-        int numBuildings = 20; // total buildings
-        float horizonY = ScreenHeight / 2;
-
         Random rand = new Random(123); // deterministic skyline
 
-        for (int i = 0; i < numBuildings; i++)
+        // Define layers: back, mid, front
+        var layers = new (int count, float alpha, int minHeight, int maxHeight)[]
         {
-            // Building position and size
-            float baseX = rand.Next(0, ScreenWidth);
-            float width = rand.Next(20, 50);
-            float height = rand.Next(120, 300); // taller buildings
-            float topY = horizonY - height;
-            float leftX = baseX;
-            float rightX = baseX + width;
+        (10, 100, 80, 150),   // distant buildings: dimmer, small
+        (12, 160, 120, 220),  // mid layer
+        (8, 200, 180, 300)    // foreground: tall, bright
+        };
 
-            // Draw building rectangle
-            g.DrawRectangle(buildingPen, leftX, topY, width, height);
-
-            // Draw windows grid proportional to building height
-            int rows = Math.Max(3, (int)(height / 20));  // vertical divisions
-            int cols = Math.Max(2, (int)(width / 10));   // horizontal divisions
-            float rowHeight = height / rows;
-            float colWidth = width / cols;
-
-            for (int r = 1; r < rows; r++)
+        foreach (var layer in layers)
+        {
+            for (int i = 0; i < layer.count; i++)
             {
-                float y = topY + r * rowHeight;
-                g.DrawLine(windowPen, leftX, y, rightX, y); // horizontal window line
-            }
-            for (int c = 1; c < cols; c++)
-            {
-                float x = leftX + c * colWidth;
-                g.DrawLine(windowPen, x, topY, x, topY + height); // vertical window line
+                // Random horizontal position
+                float baseX = rand.Next(0, ScreenWidth);
+
+                // Random width and height
+                float width = rand.Next(20, 50);
+                float height = rand.Next(layer.minHeight, layer.maxHeight);
+
+                float horizonY = ScreenHeight / 2;
+                float topY = horizonY - height;
+                float leftX = baseX;
+                float rightX = baseX + width;
+
+                // Glow helper
+                void DrawGlowLine(PointF a, PointF b, Color c, int glowWidth = 3)
+                {
+                    for (int gStep = glowWidth; gStep > 0; gStep--)
+                    {
+                        using var glowPen = new Pen(Color.FromArgb((c.A / (gStep + 1)), c.R, c.G, c.B), gStep * 2);
+                        g.DrawLine(glowPen, a, b);
+                    }
+                    using var pen = new Pen(c, 1);
+                    g.DrawLine(pen, a, b);
+                }
+
+                // Draw building outline with glow
+                DrawGlowLine(new PointF(leftX, topY), new PointF(rightX, topY), Color.FromArgb((int)layer.alpha, 255, 215, 0));
+                DrawGlowLine(new PointF(leftX, topY), new PointF(leftX, horizonY), Color.FromArgb((int)layer.alpha, 255, 215, 0));
+                DrawGlowLine(new PointF(rightX, topY), new PointF(rightX, horizonY), Color.FromArgb((int)layer.alpha, 255, 215, 0));
+                DrawGlowLine(new PointF(leftX, horizonY), new PointF(rightX, horizonY), Color.FromArgb((int)layer.alpha, 255, 215, 0));
+
+                // Draw window grid with glow
+                int rows = Math.Max(3, (int)(height / 20));
+                int cols = Math.Max(2, (int)(width / 10));
+                float rowHeight = height / rows;
+                float colWidth = width / cols;
+
+                for (int r = 1; r < rows; r++)
+                {
+                    float y = topY + r * rowHeight;
+                    float flicker = 0.8f + 0.2f * (float)Math.Sin(Environment.TickCount * 0.005 + i);
+                    Color windowColor = Color.FromArgb((int)(layer.alpha * flicker), 255, 255, 180);
+                    DrawGlowLine(new PointF(leftX, y), new PointF(rightX, y), windowColor);
+                }
+
+                for (int c = 1; c < cols; c++)
+                {
+                    float x = leftX + c * colWidth;
+                    float flicker = 0.8f + 0.2f * (float)Math.Sin(Environment.TickCount * 0.005 + i * 2);
+                    Color windowColor = Color.FromArgb((int)(layer.alpha * flicker), 255, 255, 180);
+                    DrawGlowLine(new PointF(x, topY), new PointF(x, topY + height), windowColor);
+                }
             }
         }
     }
