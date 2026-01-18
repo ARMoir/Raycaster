@@ -6,8 +6,8 @@ using System.Windows.Forms;
 
 class Program : Form
 {
-    const int ScreenWidth = 640;
-    const int ScreenHeight = 480;
+    const int ScreenWidth = 960;
+    const int ScreenHeight = 640;
 
     Bitmap framebuffer = new Bitmap(ScreenWidth, ScreenHeight);
     System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
@@ -193,6 +193,7 @@ class Program : Form
 
     void DrawCeiling(Graphics g)
     {
+        // Base gradient for ceiling
         using var brush = new LinearGradientBrush(
             new Point(0, 0),
             new Point(0, ScreenHeight / 2),
@@ -200,7 +201,48 @@ class Program : Form
             Color.FromArgb(255, 255, 20, 120)
         );
         g.FillRectangle(brush, 0, 0, ScreenWidth, ScreenHeight / 2);
+
+        // Golden city skyline
+        using var buildingPen = new Pen(Color.FromArgb(200, 255, 215, 0), 1); // golden
+        using var windowPen = new Pen(Color.FromArgb(150, 255, 255, 180), 1);  // lighter windows
+
+        int numBuildings = 20; // total buildings
+        float horizonY = ScreenHeight / 2;
+
+        Random rand = new Random(123); // deterministic skyline
+
+        for (int i = 0; i < numBuildings; i++)
+        {
+            // Building position and size
+            float baseX = rand.Next(0, ScreenWidth);
+            float width = rand.Next(20, 50);
+            float height = rand.Next(120, 300); // taller buildings
+            float topY = horizonY - height;
+            float leftX = baseX;
+            float rightX = baseX + width;
+
+            // Draw building rectangle
+            g.DrawRectangle(buildingPen, leftX, topY, width, height);
+
+            // Draw windows grid proportional to building height
+            int rows = Math.Max(3, (int)(height / 20));  // vertical divisions
+            int cols = Math.Max(2, (int)(width / 10));   // horizontal divisions
+            float rowHeight = height / rows;
+            float colWidth = width / cols;
+
+            for (int r = 1; r < rows; r++)
+            {
+                float y = topY + r * rowHeight;
+                g.DrawLine(windowPen, leftX, y, rightX, y); // horizontal window line
+            }
+            for (int c = 1; c < cols; c++)
+            {
+                float x = leftX + c * colWidth;
+                g.DrawLine(windowPen, x, topY, x, topY + height); // vertical window line
+            }
+        }
     }
+
 
     void DrawHorizonGlow(Graphics g)
     {
