@@ -145,7 +145,4 @@ namespace Raycaster
             }
         }
     }
-
 }
-
-

@@ -24,6 +24,7 @@ namespace Raycaster
             new Enemy { X = 1.5, Y = 1.5 },
             new Enemy { X = 3.5, Y = 3.5 },
             new Enemy { X = 5.5, Y = 2.5 }
+
         };
     }
 

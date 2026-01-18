@@ -1,7 +1,8 @@
+using Raycaster;
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
-using Raycaster;
 
 class Program : Form
 {
@@ -11,8 +12,8 @@ class Program : Form
     Bitmap framebuffer = new Bitmap(ScreenWidth, ScreenHeight);
     System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
 
-    //Generte Random Map
-    int[,] map = Extensions.BuildRaycasterMap(new Maze(5, 5), 5, 5);
+    // Generate Random Map
+    int[,] map = Extensions.BuildRaycasterMap(new Maze(15, 15), 15, 15);
 
     HudRenderer hud = new HudRenderer(ScreenWidth, ScreenHeight, 100);
 
@@ -21,15 +22,12 @@ class Program : Form
         posX = 0.5,
         posY = 0.5,
         dirX = 1,
-        dirY = 0
+        dirY = 0,
+        planeX = 0,
+        planeY = 0.66 // standard FOV
     };
 
     bool left, right, forward, backward;
-
-    Bitmap enemySprite = new Bitmap
-    (
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "enemy_idle.png")
-    );
 
     [STAThread]
     static void Main()
@@ -39,7 +37,7 @@ class Program : Form
 
     public Program()
     {
-        Text = "Minimal Raycaster";
+        Text = "Minimal Raycaster - Synthwave";
         ClientSize = new Size(ScreenWidth, ScreenHeight);
         DoubleBuffered = true;
 
@@ -50,7 +48,7 @@ class Program : Form
         KeyDown += (s, e) => SetKey(e.KeyCode, true);
         KeyUp += (s, e) => SetKey(e.KeyCode, false);
 
-        //Dont start in a wall
+        // Player start
         for (int y = 0; y < map.GetLength(0); y++)
         {
             for (int x = 0; x < map.GetLength(1); x++)
@@ -62,6 +60,20 @@ class Program : Form
                     break;
                 }
             }
+        }
+
+        // Add 5 enemies in walkable tiles
+        Random rng = new Random();
+        int enemyCount = 15;
+        for (int i = 0; i < enemyCount; i++)
+        {
+            int ex, ey;
+            do
+            {
+                ex = rng.Next(map.GetLength(1));
+                ey = rng.Next(map.GetLength(0));
+            } while (map[ey, ex] != 0);
+            player.enemies.Add(new SkeletonEnemy(ex + 0.5, ey + 0.5));
         }
     }
 
@@ -75,8 +87,8 @@ class Program : Form
 
     void UpdateGame()
     {
-        double moveSpeed = 0.08;
-        double rotSpeed = 0.05;
+        double moveSpeed = 0.45;
+        double rotSpeed = 0.25;
 
         if (forward)
         {
@@ -107,77 +119,98 @@ class Program : Form
             double oldPlaneX = player.planeX;
             player.planeX = player.planeX * Math.Cos(rot) - player.planeY * Math.Sin(rot);
             player.planeY = oldPlaneX * Math.Sin(rot) + player.planeY * Math.Cos(rot);
+
+            // Normalize to prevent drift
+            double len = Math.Sqrt(player.dirX * player.dirX + player.dirY * player.dirY);
+            player.dirX /= len;
+            player.dirY /= len;
+            len = Math.Sqrt(player.planeX * player.planeX + player.planeY * player.planeY);
+            player.planeX /= len;
+            player.planeY /= len;
         }
     }
-
-    public void RenderSprites(Graphics g, double[] zBuffer)
+    void RenderSprites(Graphics g, double[] zBuffer)
     {
         foreach (var enemy in player.enemies)
         {
             if (!enemy.Alive) continue;
-
-            // Enemy must be in an empty tile
             int mx = (int)enemy.X;
             int my = (int)enemy.Y;
             if (map[my, mx] != 0) continue;
 
-            // Translate to camera space
             double spriteX = enemy.X - player.posX;
             double spriteY = enemy.Y - player.posY;
 
-            // Inverse camera matrix
             double invDet = 1.0 / (player.planeX * player.dirY - player.dirX * player.planeY);
-
             double transformX = invDet * (player.dirY * spriteX - player.dirX * spriteY);
             double transformY = invDet * (-player.planeY * spriteX + player.planeX * spriteY);
 
-            if (transformY <= 0) continue; // Behind camera
+            if (transformY <= 0.5) continue;
 
             int spriteScreenX = (int)((ScreenWidth / 2) * (1 + transformX / transformY));
+            if (spriteScreenX < 0 || spriteScreenX >= ScreenWidth) continue;
+            if (transformY >= zBuffer[spriteScreenX]) continue;
 
-            int spriteHeight = Math.Abs((int)(ScreenHeight / transformY));
-            int drawStartY = -spriteHeight / 2 + ScreenHeight / 2; 
-            int drawEndY = spriteHeight / 2 + ScreenHeight / 2;
-
-            drawStartY = Math.Max(0, drawStartY);
-            drawEndY = Math.Min(ScreenHeight - 1, drawEndY);
-
-            int spriteWidth = spriteHeight;
-            int drawStartX = -spriteWidth / 2 + spriteScreenX;
-            int drawEndX = spriteWidth / 2 + spriteScreenX;
-
-            Bitmap sprite = enemySprite;
-
-            for (int stripe = drawStartX; stripe < drawEndX; stripe++)
+            if (enemy is SkeletonEnemy skeleton)
             {
-                if (stripe < 0 || stripe >= ScreenWidth) continue;
-                if (transformY >= zBuffer[stripe]) continue; // Wall in front
-
-                int texX = (int)((stripe - drawStartX) * sprite.Width / (double)spriteWidth);
-                if (texX < 0 || texX >= sprite.Width) continue;
-
-                for (int y = drawStartY; y < drawEndY; y++)
-                {
-                    int d = y * 256 - ScreenHeight * 128 + spriteHeight * 128;
-                    int texY = ((d * sprite.Height) / spriteHeight) / 256;
-
-                    if (texY < 0 || texY >= sprite.Height) continue;
-
-                    spriteHeight = Math.Min(spriteHeight, ScreenHeight * 2);
-                    spriteWidth = Math.Min(spriteWidth, ScreenWidth);
-
-                    Color c = sprite.GetPixel(texX, texY);
-
-                    // Skip transparent pixels
-                    if (c.A < 128) continue;
-
-                    framebuffer.SetPixel(stripe, y, c);
-                }
+                SkeletonRenderer.Render(g, skeleton, player, zBuffer, ScreenWidth, ScreenHeight);
             }
-
-
-
         }
+    }
+    void DrawFloor(Graphics g)
+    {
+        // Base fill: dark purple
+        g.FillRectangle(new SolidBrush(Color.FromArgb(20, 0, 40)), 0, 0, ScreenWidth, ScreenHeight);
+
+        // Neon cyan grid
+        using var gridPen = new Pen(Color.FromArgb(150, 0, 255, 255), 1); // cyan with some glow
+
+        int gridSpacing = 30;
+
+        // Vanishing point at top-right
+        float horizonY = 50;
+        float vanishingX = ScreenWidth - 20;
+
+        // Horizontal lines (bottom to horizon, left to right covering more)
+        for (float y = ScreenHeight; y >= horizonY; y -= gridSpacing)
+        {
+            float t = (ScreenHeight - y) / (ScreenHeight - horizonY); // 0 = bottom, 1 = horizon
+                                                                      // Extend left beyond screen (twice the distance to left)
+            float leftX = vanishingX - 2 * vanishingX * (1 - t);
+            float rightX = ScreenWidth;
+            g.DrawLine(gridPen, leftX, y, rightX, y);
+        }
+
+        // Vertical lines converging to vanishing point
+        int numLines = ScreenWidth / gridSpacing;
+        for (int i = -numLines; i <= numLines; i++)
+        {
+            float startX = i * gridSpacing;
+            float startY = ScreenHeight;
+            g.DrawLine(gridPen, startX, startY, vanishingX, horizonY);
+        }
+    }
+
+    void DrawCeiling(Graphics g)
+    {
+        using var brush = new LinearGradientBrush(
+            new Point(0, 0),
+            new Point(0, ScreenHeight / 2),
+            Color.FromArgb(255, 20, 0, 50),
+            Color.FromArgb(255, 255, 20, 120)
+        );
+        g.FillRectangle(brush, 0, 0, ScreenWidth, ScreenHeight / 2);
+    }
+
+    void DrawHorizonGlow(Graphics g)
+    {
+        using var brush = new LinearGradientBrush(
+            new Point(0, ScreenHeight / 2 - 20),
+            new Point(0, ScreenHeight / 2 + 20),
+            Color.FromArgb(100, 255, 0, 255),
+            Color.FromArgb(0, 255, 0, 255)
+        );
+        g.FillRectangle(brush, 0, ScreenHeight / 2 - 20, ScreenWidth, 40);
     }
 
     void Render()
@@ -185,22 +218,11 @@ class Program : Form
         using (Graphics g = Graphics.FromImage(framebuffer))
         {
             double[] zBuffer = new double[ScreenWidth];
-
             g.Clear(Color.Black);
-
-            // Ceiling
-            g.FillRectangle(
-                Brushes.DarkSlateBlue,
-                0, 0,
-                ScreenWidth, ScreenHeight / 2
-            );
-
-            // Floor
-            g.FillRectangle(
-                Brushes.DimGray,
-                0, ScreenHeight / 2,
-                ScreenWidth, ScreenHeight / 2
-            );
+            
+            DrawFloor(g);
+            DrawCeiling(g);
+            DrawHorizonGlow(g);
 
             for (int x = 0; x < ScreenWidth; x++)
             {
@@ -211,33 +233,17 @@ class Program : Form
                 int mapX = (int)player.posX;
                 int mapY = (int)player.posY;
 
-                double deltaDistX = Math.Abs(1 / rayDirX);
-                double deltaDistY = Math.Abs(1 / rayDirY);
+                double deltaDistX = rayDirX == 0 ? 1e30 : Math.Abs(1 / rayDirX);
+                double deltaDistY = rayDirY == 0 ? 1e30 : Math.Abs(1 / rayDirY);
 
                 int stepX, stepY;
                 double sideDistX, sideDistY;
 
-                if (rayDirX < 0)
-                {
-                    stepX = -1;
-                    sideDistX = (player.posX - mapX) * deltaDistX;
-                }
-                else
-                {
-                    stepX = 1;
-                    sideDistX = (mapX + 1.0 - player.posX) * deltaDistX;
-                }
+                if (rayDirX < 0) { stepX = -1; sideDistX = (player.posX - mapX) * deltaDistX; }
+                else { stepX = 1; sideDistX = (mapX + 1.0 - player.posX) * deltaDistX; }
 
-                if (rayDirY < 0)
-                {
-                    stepY = -1;
-                    sideDistY = (player.posY - mapY) * deltaDistY;
-                }
-                else
-                {
-                    stepY = 1;
-                    sideDistY = (mapY + 1.0 - player.posY) * deltaDistY;
-                }
+                if (rayDirY < 0) { stepY = -1; sideDistY = (player.posY - mapY) * deltaDistY; }
+                else { stepY = 1; sideDistY = (mapY + 1.0 - player.posY) * deltaDistY; }
 
                 bool hit = false;
                 int side = 0;
@@ -257,39 +263,55 @@ class Program : Form
                         side = 1;
                     }
 
-                    if (mapX < 0 || mapY < 0 ||
-                        mapX >= map.GetLength(1) ||
-                        mapY >= map.GetLength(0) ||
-                        map[mapY, mapX] > 0)
-                    {
+                    if (mapX < 0 || mapY < 0 || mapX >= map.GetLength(1) || mapY >= map.GetLength(0) || map[mapY, mapX] > 0)
                         hit = true;
-                    }
-
                 }
 
-                double perpWallDist =
-                    side == 0
-                        ? (mapX - player.posX + (1 - stepX) / 2) / rayDirX
-                        : (mapY - player.posY + (1 - stepY) / 2) / rayDirY;
+                double perpWallDist = side == 0
+                    ? (mapX - player.posX + (1 - stepX) / 2) / rayDirX
+                    : (mapY - player.posY + (1 - stepY) / 2) / rayDirY;
 
                 zBuffer[x] = perpWallDist;
-
                 int lineHeight = (int)(ScreenHeight / perpWallDist);
-                int drawStart = -lineHeight / 2 + ScreenHeight / 2;
-                int drawEnd = lineHeight / 2 + ScreenHeight / 2;
+                int drawStart = Math.Max(0, -lineHeight / 2 + ScreenHeight / 2);
+                int drawEnd = Math.Min(ScreenHeight - 1, lineHeight / 2 + ScreenHeight / 2);
 
-                drawStart = Math.Max(0, drawStart);
-                drawEnd = Math.Min(ScreenHeight - 1, drawEnd);
+                // Hellish wall colors
+                float depthFade = (float)Math.Clamp(1.0 / perpWallDist, 0.2f, 1.0f);
 
-                Color wallColor = side == 1 ? Color.DarkRed : Color.Red;
-                using (Pen p = new Pen(wallColor))
-                    g.DrawLine(p, x, drawStart, x, drawEnd);               
+                // Dark hellish palette
+                Color baseColor = side == 1
+                    ? Color.FromArgb(255, 120, 20, 0)   // dark red / ember
+                    : Color.FromArgb(255, 180, 80, 20); // molten orange / lava
+
+                // subtle flicker (mostly solid, barely transparent)
+                float flicker = 0.95f + 0.05f * (float)Math.Sin(Environment.TickCount * 0.006f);
+
+                // Apply depth fade to RGB only (keep alpha mostly solid)
+                baseColor = Color.FromArgb(
+                    255, // alpha stays solid
+                    (int)(baseColor.R * depthFade * flicker),
+                    (int)(baseColor.G * depthFade * flicker),
+                    (int)(baseColor.B * depthFade * flicker)
+                );
+
+                DrawGlowColumn(g, x, drawStart, drawEnd, baseColor);
             }
 
             RenderSprites(g, zBuffer);
-
             hud.Render(g, map, player);
         }
+    }
+
+    void DrawGlowColumn(Graphics g, int x, int y1, int y2, Color c)
+    {
+        for (int i = 4; i >= 1; i--)
+        {
+            using var glow = new Pen(Color.FromArgb(20, c), i * 2);
+            g.DrawLine(glow, x, y1, x, y2);
+        }
+        using var pen = new Pen(c, 1);
+        g.DrawLine(pen, x, y1, x, y2);
     }
 
     protected override void OnPaint(PaintEventArgs e)
