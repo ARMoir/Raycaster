@@ -1,30 +1,27 @@
-﻿using System;
+﻿using Raycaster;
+using System;
 using System.Linq;
 using System.Numerics;
 
-public static class SkeletonCombat
+public class SkeletonCombat
 {
-    public static void Update(SkeletonEnemy s, float dt)
-    {
-        foreach (var b in s.Bones)
-        {
-            if (!b.Broken) continue;
 
-            b.WorldStart += b.Velocity * dt;
-            b.WorldEnd += b.Velocity * dt;
-            b.Velocity *= 0.96f;
-        }
+    public void DamageSkeleton(SkeletonEnemy skeleton)
+    {
+        // Prefer core bones first
+        var targetBones = skeleton.Bones
+            .Where(b => !b.Broken)
+            .OrderByDescending(b => b.IsCore)
+            .ToList();
+
+        if (targetBones.Count == 0)
+            return;
+
+        Random rng = new Random();
+        int breaks = rng.Next(5, 10);
+
+        foreach (var bone in targetBones.Take(breaks))
+            bone.Broken = true;
     }
 
-    public static void AxeHit(SkeletonEnemy s, Vector2 dir)
-    {
-        var intact = s.Bones.Where(b => !b.Broken).ToList();
-        if (intact.Count == 0) return;
-
-        var bone = intact[Random.Shared.Next(intact.Count)];
-        bone.Broken = true;
-        bone.WorldStart = bone.LocalStart + s.Position;
-        bone.WorldEnd = bone.LocalEnd + s.Position;
-        bone.Velocity = dir * Random.Shared.Next(120, 220);
-    }
 }

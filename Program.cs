@@ -4,6 +4,8 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Numerics;
 using System.Windows.Forms;
+using System.Media;
+
 
 class Program : Form
 {
@@ -11,6 +13,7 @@ class Program : Form
     const int ScreenHeight = 640;
     Random rng = new Random();
 
+    SoundPlayer musicPlayer;
 
     bool attacking;
     int attackCooldown = 0;
@@ -42,11 +45,22 @@ class Program : Form
         Application.Run(new Program());
     }
 
+    void StartMusic()
+    {
+        musicPlayer = new SoundPlayer("music.wav");
+        musicPlayer.Load();
+        musicPlayer.PlayLooping();
+    }
+
     public Program()
     {
         Text = "Minimal Raycaster - Synthwave";
         ClientSize = new Size(ScreenWidth, ScreenHeight);
         DoubleBuffered = true;
+
+        string musicPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "music.wav");
+        SynthwaveBeat.Generate("music.wav", 132, 4, seed: Environment.TickCount);
+        StartMusic();
 
         timer.Interval = 16;
         timer.Tick += (s, e) => { UpdateGame(); Render(); Invalidate(); };
